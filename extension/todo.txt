@@ -1,0 +1,38 @@
+// wire up translate button
+
+// translate should only be primary if no translation exists
+
+// ^ or if translation === en.json + "*" (e.g. "Add*")
+
+// ^ otherwise it's secodnary and called "Re-translate"
+
+support singular|plural translation with 2-col layout
+
+// add "save to file" option for each after change
+   ^ this goes through node server
+
+// allow manual tweaking after translation arrives
+
+// ability to add new translation in left panel
+
+// search filter in left panel by key or english text
+
+// option to prefer elevate folders to the top in left panel
+
+// save prefs in extension state (e.g. elevate folders pref)
+
+// add filter for "only new translations" that checks against development en.json
+
+// ^ (probably requires having either manually en.json added or used left panel add already!)
+
+// left panel filters etc. are "stickY" - use flex column for below content
+
+// after clicking blue "translate" and saving changes, "translate" should now be grey and re-translate
+
+// save api key in state
+
+fix extra space after period on right side
+
+// add ability to edit existing english translations
+
+add extension to bak.sh script

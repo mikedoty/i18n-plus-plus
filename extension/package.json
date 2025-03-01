@@ -1,0 +1,58 @@
+{
+	"name": "i18n-plus-plus",
+	"displayName": "i18n++",
+	"version": "0.9.892",
+	"publisher": "mikedoty",
+	"description": "Utility to manage i18n translation key values.",
+	"engines": {
+		"vscode": "^1.74.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [],
+	"main": "./out/main.js",
+	"contributes": {
+		"configuration": {
+			"title": "i18n++",
+			"properties": {
+				"i18n-plus-plus.languageFilesPath": {
+					"type": "string",
+					"default": "",
+					"description": "This is the folder that contains your language files in JSON format."
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "main.i18nplusplus",
+				"title": "i18n++"
+			},
+			{
+				"command": "main.i18nplusplus.comparisonView",
+				"title": "i18n++ - Comparison View"
+			},
+			{
+				"command": "main.i18nplusplus.quickSearch",
+				"title": "i18n++ - Quick Search"
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"lint": "eslint \"src/**/*.ts\"",
+		"watch": "tsc -watch -p ./"
+	},
+	"devDependencies": {
+		"@types/node": "^16.18.34",
+		"@types/vscode": "^1.73.0",
+		"@typescript-eslint/eslint-plugin": "^6.7.0",
+		"@typescript-eslint/parser": "^6.7.0",
+		"eslint": "^8.26.0",
+		"typescript": "^5.3.2"
+	},
+	"dependencies": {
+		"axios": "^1.6.2"
+	}
+}

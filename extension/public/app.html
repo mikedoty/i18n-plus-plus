@@ -1,0 +1,290 @@
+<div class="row g-0 h-100">
+  <div class="col-8 h-100 overflow-auto">
+    <div class="d-flex flex-column h-100">
+      <div
+        class="d-flex align-items-center px-4 py-2"
+        style="background-color: #111519; border-bottom: 2px #222 solid"
+      >
+        <div>
+          <b-input-group>
+            <b-button variant="secondary">
+              <i class="fa fa-search" />
+            </b-button>
+            <b-form-input
+              id="filter-by-text"
+              type="search"
+              placeholder="Filter by key or English text..."
+              v-model="filterText"
+              style="min-width: 300px; max-width: 300px"
+              :debounce="500"
+            />
+          </b-input-group>
+        </div>
+
+        <div class="ms-4">
+          <b-form-checkbox v-model="options.foldersFirst" class="nowrap">
+            <span class="ps-2">Folders First</span>
+          </b-form-checkbox>
+        </div>
+
+        <div class="ms-4">
+          <b-form-checkbox v-model="options.onlyNew" class="nowrap">
+            <span class="ps-2">Only New</span>
+          </b-form-checkbox>
+        </div>
+
+        <div class="ms-4">
+          <b-form-checkbox v-model="options.onlyUntranslated" class="nowrap">
+            <span class="ps-2">Only Untranslated</span>
+          </b-form-checkbox>
+        </div>
+
+        <div v-if="options.onlyUntranslated" class="ms-4">
+          <select class="px-4 py-2" v-model="options.langCodeFocus">
+            <option value="">(All Languages)</option>
+            <option value="es">es (Spanish)</option>
+            <option value="fr">fr (French)</option>
+            <option value="fi">fi (Finnish)</option>
+            <option value="sv">sv (Swedish)</option>
+          </select>
+        </div>
+
+        <!-- <div class="mx-2" style="white-space: nowrap">Folders First:</div>
+              <b-input-group>
+                <b-button
+                  :active="!options.foldersFirst"
+                  active-class="active"
+                  @click="options.foldersFirst = false"
+                >
+                  Off
+                </b-button>
+                <b-button
+                  :active="options.foldersFirst"
+                  active-class="active"
+                  @click="options.foldersFirst = true"
+                >
+                  On
+                </b-button>
+              </b-input-group> -->
+
+        <div class="flex-fill" />
+
+        <div>
+          <b-button
+            variant="primary"
+            style="white-space: nowrap"
+            @click="onShowAddNew('')"
+            @ok="onAddTranslation"
+          >
+            <i class="fa fa-plus" /> Add Key...
+          </b-button>
+        </div>
+      </div>
+      <div
+        class="flex-fill px-4 py-4 overflow-auto"
+        style="border-right: 2px #222 solid"
+      >
+        <Row
+          :items="filteredItems"
+          @select-item="onSelectItem"
+          :check-is-key-expanded="checkIsKeyExpanded"
+          @toggle-expand="toggleExpanded($event)"
+          @show-add-new="onShowAddNew($event)"
+          @find-in-files="onFindInFiles($event)"
+          @copy-to-clipboard="onCopyToClipboard($event)"
+        />
+      </div>
+    </div>
+  </div>
+  <div
+    class="col-4 h-100 px-4 py-4 overflow-auto"
+    style="background-color: #111519"
+  >
+    <b-alert v-model="showPortAlert" class="mb-2" variant="success" dismissible>
+      Proxy API running on port {{ port }}
+    </b-alert>
+    <div class="row" style="filter: brightness(75%)">
+      <div class="col-12 d-flex align-items-center">
+        <div class="flex-fill">
+          <label>Google Translate API Key</label>
+          <div class="d-flex align-items-center">
+            <b-form-input
+              :type="showApiKey ? 'text' : 'password'"
+              v-model="options.apiKey"
+            />
+            <div
+              class="mx-2"
+              style="cursor: pointer"
+              @click="showApiKey = !showApiKey"
+            >
+              <span v-if="showApiKey" key="show-api-key-on">
+                <i class="fa fa-eye" />
+              </span>
+              <span v-else key="show-api-key-off">
+                <i class="fa fa-eye-slash" />
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <hr />
+
+    <template v-if="selectedItem">
+      <div class="d-flex align-items-center">
+        <div>
+          <i class="fa fa-file fa-fw" />
+        </div>
+        <div class="d-flex flex-column flex-fill ps-1">
+          <label>
+            <span class="prefix" v-html="selectedItem.prefix" /><span
+              v-html="selectedItem.displayShortKey"
+            />
+          </label>
+          <div class="d-flex align-items-center">
+            <b-form-input
+              type="text"
+              :readonly="!selectedItem.isEditing"
+              v-model="selectedItem.valueChanges"
+              :class="{
+                      disabled: !selectedItem.isEditing,
+                    }"
+            />
+            <div
+              class="mx-2"
+              @click="onToggleEditEnglish"
+              style="cursor: pointer"
+            >
+              <span v-if="selectedItem.isEditing" key="selected-item-edit-on">
+                <i class="fa fa-save" />
+              </span>
+              <span v-else key="selected-item-edit-off">
+                <i class="fa fa-pencil" />
+              </span>
+            </div>
+          </div>
+          <!-- <div>{{selectedItem}}</div> -->
+        </div>
+      </div>
+      <hr />
+    </template>
+
+    <div class="row">
+      <div class="col-12">
+        <template v-if="selectedItem">
+          <div v-for="langCode in langCodes" :key="langCode" class="mb-2">
+            <label>{{ getLangCodeTitle(langCode) }}</label>
+
+            <!-- Pluralizable items require 2 inputs! -->
+            <template v-if="isSelectedItemPluralizable">
+              <div class="row">
+                <div class="col-6">
+                  <label style="filter: brightness(0.75)">Singular</label>
+                  <b-form-input
+                    type="text"
+                    :value="getSingularSelectedItemTranslation(langCode)"
+                    @input="onUpdateSingularSelectedItemTranslation(langCode, $event)"
+                  />
+                </div>
+                <div class="col-6">
+                  <label style="filter: brightness(0.75)">Plural</label>
+                  <b-form-input
+                    type="text"
+                    :value="getPluralSelectedItemTranslation(langCode)"
+                    @input="onUpdatePluralSelectedItemTranslation(langCode, $event)"
+                  />
+                </div>
+              </div>
+              <!--
+                If translation exists, render a readonly fake-form-looking
+                input below for a visual confirmation that we'll be saving
+                the right singular | plural value
+              -->
+              <div
+                v-if="selectedItemTranslationsChanges[langCode]"
+                class="fake-form-input mt-2 disabled"
+                v-html="selectedItemTranslationsChanges[langCode]"
+              />
+            </template>
+            <!-- Items with "long" values will use a textarea -->
+            <template v-else-if="checkIsLongValue(langCode)">
+              <b-form-textarea
+                rows="2"
+                v-model="selectedItemTranslationsChanges[langCode]"
+              />
+            </template>
+            <template v-else>
+              <b-form-input
+                type="text"
+                v-model="selectedItemTranslationsChanges[langCode]"
+              />
+            </template>
+            <div class="d-flex mt-2">
+              <div class="flex-fill" />
+
+              <template v-if="checkIsValueModified(langCode)">
+                <b-button
+                  variant="primary"
+                  @click="onSaveChanges(langCode)"
+                  class="me-2"
+                >
+                  Save Changes
+                </b-button>
+                <b-button
+                  v-if="options.langCodeFocus === langCode"
+                  variant="primary"
+                  @click="onSaveChanges(langCode, true)"
+                  class="me-2"
+                >
+                  Save and Continue
+                </b-button>
+              </template>
+              <template v-else>
+                <b-button
+                  v-if="options.onlyUntranslated && options.langCodeFocus === langCode"
+                  variant="secondary"
+                  @click="onSkipItem()"
+                  class="me-2"
+                >
+                  Skip
+                </b-button>
+              </template>
+
+              <b-button
+                :variant="getTranslateButtonVariant(langCode)"
+                @click="onTranslate(langCode)"
+              >
+                {{ getTranslateButtonText(langCode) }}
+              </b-button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <b-modal
+    v-if="addNewModal.show"
+    v-model="addNewModal.show"
+    centered
+    hide-header
+    ok-title="Add Translation"
+    :ok-disabled="addNewModal.isBusy || !addNewModal.key || !addNewModal.value"
+    :cancel-disabled="addNewModal.isBusy"
+    :no-close-on-esc="addNewModal.isBusy"
+    no-close-on-backdrop
+    @ok="onAddTranslation"
+  >
+    <label>Key</label>
+    <b-form-input type="text" v-model="addNewModal.key" />
+
+    <br />
+
+    <label>Value</label>
+    <b-form-input type="text" v-model="addNewModal.value" />
+  </b-modal>
+</div>
+<!-- <p>${s}</p> -->
+<!-- <p>
+        <img src="https://mario.wiki.gallery/images/f/f0/DMW-DryBones.png" />
+      </p> -->
