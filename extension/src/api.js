@@ -2,30 +2,10 @@
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-// const { start } = require("repl");
 const exec = require("child_process").exec;
 
-const sendResponse = (res, statusCode, data, isJSON) => {
-  const headers = {
-    "access-control-allow-origin": "*",
-    "access-control-allow-method": "*",
-    "access-control-allow-headers": "*",
-  };
-
-  if (isJSON) {
-    headers["content-type"] = "application/json";
-  }
-  res.writeHead(200, headers);
-
-  res.write(data);
-  res.end();
-};
-
-const sendJSON = (res, statusCode, data) => {
-  sendResponse(res, statusCode, data, true);
-};
-
 let relativeRoot = "";
+
 module.exports.setRelativeRoot = (value) => {
   relativeRoot = value;
   if (!relativeRoot.endsWith("/")) {
@@ -47,23 +27,7 @@ module.exports.translate = async (json) => {
     .then((json) => {
       return { ...json, processed: true };
     });
-  // .catch((err) => {
-  //   console.log(err);
-  //   sendJSON(res, 500, JSON.stringify({ error: err.message }));
-  // });
 };
-
-//   } else if (req.method === "GET" && req.url === "/fix-en") {
-//     const filename = `${relativeRoot}src/v2/services/i18n/lang/en.json`;
-
-//     const data = safeReadFileSync(filename, "utf-8");
-//     const obj = JSON.parse(data);
-//     const alphaObj = alphabetize(obj);
-
-//     safeWriteFileSync(filename, JSON.stringify(alphaObj, null, 2), "utf-8");
-
-//     sendJSON(res, 200, JSON.stringify({ success: true }));
-//   } else if (req.method === "POST" && req.url === "/save") {
 
 module.exports.save = async (json) => {
   const { langCode, key, value } = json;
@@ -134,13 +98,9 @@ module.exports.save = async (json) => {
     workaroundRelativeRoot = "c:/" + relativeRoot.substring(3);
   }
 
-  // windows, node, vscode, and its crappy "i might or might not
-  // load in various env vars" just hack in a hard-coded configurable prefix.
-  // const utilPathPrefix = "/c/Users/UDOTYM1/AppData/Local/Programs/Git/usr/bin/";
-  const utilPathPrefix = "";
   const diffPromise = new Promise((resolve) => {
     const cmd = exec(
-      `cd ${workaroundRelativeRoot} && ${utilPathPrefix}diff -w --strip-trailing-cr ${filename} ${tmpFilename} > ${diffFilename}`,
+      `cd ${workaroundRelativeRoot} && diff -w --strip-trailing-cr ${filename} ${tmpFilename} > ${diffFilename}`,
       (err, stdout, stderr) => {
         console.log(stdout, stderr, err);
         resolve();
@@ -153,7 +113,7 @@ module.exports.save = async (json) => {
   // file, then clean up our junk files before concluding
   const patchPromise = new Promise((resolve) => {
     const cmd = exec(
-      `cd ${workaroundRelativeRoot} && ${utilPathPrefix}patch ${filename} ${diffFilename} && rm ${tmpFilename} ${diffFilename}`,
+      `cd ${workaroundRelativeRoot} && patch ${filename} ${diffFilename} && rm ${tmpFilename} ${diffFilename}`,
       (err, stdout, stderr) => {
         console.log(stdout, stderr, err);
         resolve();
@@ -170,7 +130,6 @@ module.exports.save = async (json) => {
 
   return { success: true };
 };
-//   } else if (req.method === "GET" && req.url.startsWith("/lang/")) {
 
 module.exports.getLangFile = async (langCode) => {
   // const langCode = req.url.substring(6);
@@ -181,10 +140,7 @@ module.exports.getLangFile = async (langCode) => {
   );
 
   return JSON.parse(data);
-  // sendJSON(res, 200, data);
 };
-
-//   } else if (req.method === "GET" && req.url === "/diff") {
 
 module.exports.getDiff = async () => {
   // Use en.json file to check for which translation keys
@@ -256,7 +212,6 @@ module.exports.getDiff = async () => {
   const newKeys = current.keys.filter((x) => !existing.keys.includes(x));
 
   return { new: newKeys };
-  // sendJSON(res, 200, JSON.stringify({ new: newKeys }));
 };
 
 function alphabetize(obj) {
@@ -284,20 +239,6 @@ function preserveOrderAndFormatting(existingJSON, newJSON) {
     .map((x) => x.replace(/\s+$/, ""))
     .map((x) => x + lineEnding)
     .join("");
-
-  // return newJSON;
-  // const linesBefore = existingJSON.split("\n");
-  // const linesAfter = newJSON.split("\n");
-
-  // for (let i = 0; i < linesAfter.length; i++) {
-  //   // For now, even preserve bad indentation
-  //   const before = linesBefore.find(x => x.replace(/\s/g, "") === linesAfter[i].replace(/\s/g, ""));
-  //   if (before) {
-  //     // linesAfter[i] = before;
-  //   }
-  // }
-
-  // return linesAfter.join("\n");
 }
 
 function insertAlphabetically(obj, key, value) {
@@ -361,5 +302,3 @@ function safeWriteFileSync(filename, data, encType) {
     return data2;
   }
 }
-
-// module.exports.startMockApi = startMockApi;

@@ -9,8 +9,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Grab these attributes from the supplied html before
   // instantiating the vue component, which will overwrite the
   // entire document with the `template` html data.
-  const providedPort = document.body.getAttribute("data-port");
-
   const markup = await fetch(
     document.querySelector("#app").getAttribute("data-uri")
   ).then((resp) => resp.text());
@@ -101,8 +99,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     el: "#app",
     data: () => ({
       vscode: null,
-      port: providedPort,
-      showPortAlert: false,
       deferredPromiseResolves: {},
       clickCount: 0,
       filterText: "",
@@ -180,17 +176,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const promises = [];
       for (const langCode of ["en", ...this.langCodes]) {
-        const uri = `http://localhost:${this.getPort()}/lang/${langCode}`;
-
-        console.log("ASKING FOR", uri);
-        // const promise = fetch(uri)
-        // const promise = api.getLangFile(langCode)
         const promise = this.callApi("getLangFile", langCode)
           .then((x) => {
             console.log("ok we got x back", x);
             return Promise.resolve(x);
           })
-          // .then((resp) => resp.json())
           .then((json) => {
             if (langCode === "en") {
               // Share with actual extension
@@ -337,14 +327,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         return promise;
       },
-      getPort() {
-        if (this.port) {
-          return this.port;
-        }
-
-        // May not be mounted yet or something
-        return document.body.getAttribute("data-port");
-      },
       // Takes a nested translation literals file and converts it into a flat list.
       // Currently only used to postMessage to parent to share translation data
       // for extra translation functionality (splitview stuff).
@@ -391,11 +373,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       // allItems, just clean the slate and make sure all data
       // is up-to-date
       refreshLangCodeItems(langCode) {
-        const uri = `http://localhost:${this.getPort()}/lang/${langCode}`;
-        // return fetch(uri)
         return (
           this.callApi("getLangFile", langCode)
-            // .then((resp) => resp.json())
             .then((json) => {
               // Forced alphabetization
               json = this.alphabetize(json);
@@ -414,11 +393,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Get a flat list of keys that have only been added on current
       // branch - have not been merged into development
       fetchNewTranslationKeys() {
-        const uri = `http://localhost:${this.getPort()}/diff`;
-        // return fetch(uri)
         return (
           this.callApi("getDiff")
-            // .then((resp) => resp.json())
             .then((json) => json.new)
         );
       },
@@ -749,18 +725,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       },
       translateString(val, toLang) {
-        const googleTranslateApiCodes = {
-          fin: "fi",
-          swe: "sv",
-        };
-
-        // We don't use the "traditional" (or at least, the google-preferred)
-        // lang codes, so some of them need to be overwritten here.
-        if (googleTranslateApiCodes[toLang]) {
-          toLang = googleTranslateApiCodes[toLang];
-        }
-
-        // return fetch(`http://localhost:${this.getPort()}/translate`, {
         return (
           this.callApi("translate", {
             apiKey: this.options.apiKey,
@@ -823,23 +787,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       },
       onSaveChanges(langCode, continueToNextAfterSave) {
-        // fetch(`http://localhost:${this.getPort()}/save`, {
-        //   method: "POST",
-        //   headers: {
-        //     "content-type": "application/json",
-        //   },
-        //   body: JSON.stringify({
-        //     langCode,
-        //     key: this.selectedItem.key,
-        //     value: this.selectedItemTranslationsChanges[langCode],
-        //   }),
-        // })
         this.callApi("save", {
           langCode: langCode,
           key: this.selectedItem.key,
           value: this.selectedItemTranslationsChanges[langCode],
         })
-          // .then((res) => res.json())
           .then((json) => {
             this.selectedItemTranslations[langCode] =
               this.selectedItemTranslationsChanges[langCode];
@@ -881,7 +833,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       },
       onAddTranslation() {
         this.addNewModal.isBusy = true;
-        // fetch(`http://localhost:${this.getPort()}/save`, {
         this.callApi("save", {
           langCode: "en",
           key: this.addNewModal.key,
@@ -904,9 +855,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       },
     },
     watch: {
-      port(val) {
-        console.log("Port found in body attr:", val);
-      },
       filterText(val) {
         // If user clears search filter, then wipe out all expanded keys
         // state data.  If they do a new search, they start from square one.
