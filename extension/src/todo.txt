@@ -1,5 +1,0 @@
-Remove applied tags
-
-cycle to next result
-
-reveal (next) line on search
