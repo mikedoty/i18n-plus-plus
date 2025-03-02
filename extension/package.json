@@ -20,6 +20,11 @@
 					"type": "string",
 					"default": "",
 					"description": "This is the folder that contains your language files in JSON format."
+				},
+				"i18n-plus-plus.mainBranch": {
+					"type": "string",
+					"default": "",
+					"description": "The name of the branch that you and your team merge work into.  This might be \"development\" or \"dev\" etc.  This is used to determine which translation keys are new (i.e. \"Show New Only\")."
 				}
 			}
 		},

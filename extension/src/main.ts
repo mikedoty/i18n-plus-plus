@@ -4,12 +4,7 @@ import * as vscode from "vscode";
 
 import * as fs from "fs";
 import * as path from "path";
-import { relative } from "path";
 
-// import * as api2 from "../src/api";
-
-// import startProxyApi from "../src/proxy";
-const api = require("../src/proxy");
 const api2 = require("../src/api");
 
 // Typically key and value are both string, but conceivably
@@ -71,8 +66,6 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // vscode.window.showInformationMessage(configValue);
-
       if (configValue.endsWith("/")) {
         configValue = configValue.substring(0, configValue.length - 1);
       }
@@ -87,6 +80,14 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       api2.setRelativeRoot(relativeRoot);
+
+      let developmentBranch = "";
+      configValue = extensionConfig.get("mainBranch");
+      if (configValue) {
+        developmentBranch = configValue;
+      }
+
+      api2.setDevelopmentBranch(developmentBranch);
 
       const panel = vscode.window.createWebviewPanel(
         "i18n-plus-plus-panel",

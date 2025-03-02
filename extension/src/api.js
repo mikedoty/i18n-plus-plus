@@ -13,6 +13,12 @@ module.exports.setRelativeRoot = (value) => {
   }
 };
 
+let developmentBranch = "";
+
+module.exports.setDevelopmentBranch = (value) => {
+  developmentBranch = value;
+};
+
 module.exports.translate = async (json) => {
   const { apiKey, payload } = json;
 
@@ -157,7 +163,7 @@ module.exports.getDiff = async () => {
 
     console.log("wrr", workaroundRelativeRoot);
     const cmd = exec(
-      `cd ${workaroundRelativeRoot} && git show master:${langCode}.json`,
+      `cd ${workaroundRelativeRoot} && git show ${developmentBranch}:${langCode}.json`,
       (err, stdout, stderr) => {
         console.log(stdout, stderr, err);
         const data = stdout;
