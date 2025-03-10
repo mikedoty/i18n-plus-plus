@@ -1,4 +1,7 @@
-npm run build;
+echo "MAKE SURE node -v is >= 18!";
+
+# npm run build;
+npm run build -- --mode development;
 
 for f in `find dist/assets -name 'index*css'`; do
     mv $f dist/assets/vue-renderer.css;

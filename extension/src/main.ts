@@ -10,7 +10,7 @@ const api2 = require("../src/api");
 // Typically key and value are both string, but conceivably
 // the value could be an array.  (It will never be an object,
 // as the list we receive is flattened.)
-var translationLiterals: { [key: string]: any };
+var translationLiterals: { [key: string]: any } = {};
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -28,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
     "main.i18nplusplus",
     () => {
-      vscode.window.showInformationMessage("hey there! welcome!");
+      // vscode.window.showInformationMessage("hey there! welcome!");
       // The code you place here will be executed every time your command is executed
       const extensionConfig = vscode.workspace.getConfiguration(
         "i18n-plus-plus"
@@ -79,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      api2.setRelativeRoot(relativeRoot);
+      api2.setRelativeRoot(context, relativeRoot);
 
       let developmentBranch = "";
       configValue = extensionConfig.get("mainBranch");
@@ -87,7 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
         developmentBranch = configValue;
       }
 
-      api2.setDevelopmentBranch(developmentBranch);
+      api2.setDevelopmentBranch(context, developmentBranch);
 
       const panel = vscode.window.createWebviewPanel(
         "i18n-plus-plus-panel",
@@ -146,7 +146,12 @@ export function activate(context: vscode.ExtensionContext) {
           case "api-call":
             if (api2[apiMethod]) {
               const { id, args } = JSON.parse(message.text);
-              api2[apiMethod].apply(null, args).then((json: any) => {
+
+              // Always supply context as the first arg
+              // Then supply all given args.  No, this is not very
+              // "typescript-y."  No, I don't care.
+              // Then supply vscode as a final arg.  Most functions ignore this.
+              api2[apiMethod].apply(null, [context, ...args, vscode]).then((json: any) => {
                 //
                 panel.webview.postMessage({
                   command: "api-response",
@@ -198,176 +203,39 @@ export function activate(context: vscode.ExtensionContext) {
         }
       });
 
-      panel.webview.html = getHtml(
-        appSourceFile,
-        enUri,
-        markupUri,
-        langUris
-      );
+      const diskPaths: { [key: string]: vscode.Uri } = {
+        js: panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "assets", "vue-renderer.js")),
+        css: panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "assets", "vue-renderer.css")),
+      };
+
+      panel.webview.html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <link rel="icon" href="/favicon.ico">
+
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-vue-next@0.15.5/dist/bootstrap-vue-next.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vite App</title>
+        <script type="module" crossorigin src="${diskPaths.js}"></script>
+        <link rel="stylesheet" crossorigin href="${diskPaths.css}">
+      </head>
+      <body class="h-100">
+        <div id="app" class="h-100"></div>
+      </body>
+      </html>
+      `;
 
       panel.onDidDispose(() => {
-        // if (proxyApi) {
-        //   proxyApi.close(() => {
-        //     console.log(
-        //       "Webview disposed.  Proxy api server has been shut down."
-        //     );
-        //   });
-        // }
+        // bye
       });
     }
   );
 
   context.subscriptions.push(disposable);
-
-  const disposable2 = vscode.commands.registerCommand(
-    "main.i18nplusplus.comparisonView",
-    () => {
-      const currentDocument = vscode.window.activeTextEditor?.document;
-      if (!currentDocument) {
-        return;
-      }
-
-      let data = currentDocument.getText();
-      if (!data) {
-        return;
-      }
-
-      let data2 = data;
-
-      const editor = vscode.window.activeTextEditor;
-
-      const ranges1: Array<vscode.Range> = [];
-      const ranges2: Array<vscode.Range> = [];
-
-      const lines1 = data.split("\n");
-      const lines2 = data2.split("\n");
-
-      for (const key in translationLiterals) {
-        const searchTerms = [
-          `$t("${key}")`,
-          `$t('${key}')`,
-          `"${key}"`,
-          `'${key}'`,
-        ];
-        for (const term of searchTerms) {
-          for (let i = 0; i < lines1.length; i++) {
-            let pos = lines1[i].indexOf(term);
-            while (pos >= 0) {
-              // lines1[i] =
-              //   lines1[i].substring(0, pos) +
-              //   translationLiterals[key] +
-              //   lines1[i].substring(pos + term.length);
-
-              ranges1.push(
-                new vscode.Range(
-                  new vscode.Position(i, pos),
-                  new vscode.Position(i, pos + term.length)
-                )
-              );
-
-              pos = lines1[i].indexOf(term, pos + term.length);
-            }
-
-            pos = lines2[i].indexOf(term);
-            while (pos >= 0) {
-              lines2[i] =
-                lines2[i].substring(0, pos) +
-                translationLiterals[key] +
-                lines2[i].substring(pos + term.length);
-
-              ranges2.push(
-                new vscode.Range(
-                  new vscode.Position(i, pos),
-                  new vscode.Position(i, pos + translationLiterals[key].length)
-                )
-              );
-
-              pos = lines2[i].indexOf(
-                term,
-                pos + translationLiterals[key].length
-              );
-            }
-          }
-        }
-        // data = data?.replace(`$t("${key}")`, translationLiterals[key]);
-        // data = data?.replace(`$t('${key}')`, translationLiterals[key]);
-        // data = data?.replace(`"${key}"`, translationLiterals[key]);
-        // data = data?.replace(`'${key}'`, translationLiterals[key]);
-      }
-
-      data2 = lines2.join("\n");
-
-      const decorationTest = vscode.window.createTextEditorDecorationType({
-        backgroundColor: "green",
-      });
-
-      let tmpFilename = currentDocument.fileName;
-      tmpFilename = path.basename(tmpFilename.replace(/\\/g, "/"));
-      tmpFilename = `__tmp_${new Date().getTime()}_${tmpFilename}`;
-
-      tmpFilename = `c:/Users/UDOTYM1/AppData/Local/Temp/${tmpFilename}`;
-
-      fs.writeFileSync(tmpFilename, data2, "utf-8");
-
-      // vscode.workspace.openTextDocument({
-      //   language: editor?.document.languageId,
-      //   content: data,
-      // }).then((document) => {
-      vscode.workspace
-        .openTextDocument(vscode.Uri.file(tmpFilename))
-        .then((document) => {
-          vscode.window
-            .showTextDocument(document, {
-              viewColumn: vscode.ViewColumn.Beside,
-              preserveFocus: true,
-              preview: true,
-            })
-            .then((newEditor) => {
-              //
-              editor?.setDecorations(decorationTest, ranges1);
-              newEditor.setDecorations(decorationTest, ranges2);
-            });
-
-          let ignoreNext = false;
-          vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-            if (ignoreNext) {
-              // Trying to avoid stupid loop where in the process of adjusting
-              // the scroll for the "other" editor, it in turn fires off a
-              // "scroll changed" event.
-              ignoreNext = false;
-              return;
-            }
-
-            const newEditor = vscode.window.visibleTextEditors.find(
-              (editor) => editor.document === document
-            );
-
-            console.log(e.visibleRanges[0].start, e.visibleRanges[0]);
-            if (e.textEditor === newEditor) {
-              const range = new vscode.Range(
-                e.visibleRanges[0].start,
-                e.visibleRanges[0].start
-              );
-              // editor?.revealRange(e.visibleRanges[0]);//, vscode.TextEditorRevealType.AtTop);
-              ignoreNext = true;
-              editor?.revealRange(range, vscode.TextEditorRevealType.AtTop);
-            } else {
-              const range = new vscode.Range(
-                e.visibleRanges[0].start,
-                e.visibleRanges[0].start
-              );
-              // newEditor?.revealRange(e.visibleRanges[0]);//, vscode.TextEditorRevealType.AtTop);
-              ignoreNext = true;
-              newEditor?.revealRange(range, vscode.TextEditorRevealType.AtTop);
-            }
-          });
-        });
-
-      // vscode.window.activeTextEditor?.document.
-    }
-  );
-
-  context.subscriptions.push(disposable2);
 
   let isHoverInitialized = false;
 
@@ -490,9 +358,62 @@ export function activate(context: vscode.ExtensionContext) {
     backgroundColor: "#893101",
   });
 
+  let lastSearchText = "";
   const disposable3 = vscode.commands.registerCommand(
     "main.i18nplusplus.quickSearch",
     () => {
+      class Thing implements vscode.QuickPickItem {
+        label: string
+        description: string
+        detail: string
+        alwaysShow: boolean
+
+        range: vscode.Range
+
+        // constructor(public base: vscode.Uri, public uri: vscode.Uri) {
+        constructor(label: string, description: string, detail: string, range: vscode.Range) {
+          this.label = label;
+          this.description = description;
+          this.detail = detail;
+          this.alwaysShow = true;
+
+          this.range = range;
+        }
+      }
+
+      const extensionConfig = vscode.workspace.getConfiguration(
+        "i18n-plus-plus"
+      );
+
+      let relativeRoot = "";
+      let configValue: string | undefined = extensionConfig.get("languageFilesPath");
+      if (configValue) {
+        relativeRoot = configValue;
+      }
+
+      // If the main extension hasn't been loaded up (which triggers
+      // a message to provide translationLiterals its content), just
+      // manually loop through the en.json file here and grab them
+      //
+      // This way we don't have to have a hard requirement to
+      // "please launch the actual extension" to do the quick search
+      if (Object.keys(translationLiterals).length === 0) {
+        const data = fs.readFileSync(path.join(relativeRoot, "en.json"), "utf-8");
+        const json = JSON.parse(data);
+
+        const localWalk = (obj: any, prefix: string) => {
+          for (let key in obj) {
+            if (obj[key] instanceof Object) {
+              localWalk(obj[key], (prefix ? prefix + "." : "") + key + ".");
+            } else {
+              translationLiterals[prefix + key] = obj[key];
+            }
+          }
+        };
+
+        localWalk(json, "");
+      }
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         return;
@@ -511,6 +432,148 @@ export function activate(context: vscode.ExtensionContext) {
         isHoverInitialized = true;
       }
 
+      const lines = data.split("\n");
+      const findMatches = (searchTerm: string) => {
+        const results: Thing[] = [];
+
+        const matchingKeys: string[] = [];
+        for (const key in translationLiterals) {
+          if (
+            translationLiterals[key]
+              .toLowerCase()
+              .includes(searchTerm.toLowerCase())
+          ) {
+            matchingKeys.push(key);
+          }
+        }
+
+        const ranges: Array<vscode.Range> = [];
+        const currentLineIdx = editor.selection.active.line || 0;
+
+        for (const key of matchingKeys) {
+          const searchTerms = [
+            `$t("${key}")`,
+            `$t('${key}')`,
+            `$tc("${key}")`,
+            `$tc('${key}')`,
+            `"${key}"`,
+            `'${key}'`,
+          ];
+
+          // Loop through lines first - cuz if we match one search term,
+          // that's good enough and we'll skip the others
+          for (let i = 0; i < lines.length; i++) {
+            for (let j = 0; j < searchTerms.length; j++) {
+              const term = searchTerms[j];
+              let pos = lines[i].indexOf(term);
+              if (pos >= 0) {
+                const range = new vscode.Range(
+                  new vscode.Position(i, pos),
+                  new vscode.Position(i, pos + term.length)
+                );
+                ranges.push(range);
+
+                results.push(new Thing(searchTerms[j], `Line ${i + 1}`, lines[i], range));
+
+                // pos = lines[i].indexOf(term, pos + term.length);
+
+                // Break outer loop too
+                j = lines.length + 1;
+                break;
+              }
+            }
+          }
+        }
+
+        // Sort by line order, and then we'll be able to determine
+        // the "next" item
+        results.sort((a, b) => {
+          return a.range.start.line < b.range.start.line ? -1 : a.range.start.line > b.range.start.line ? 1 : 0;
+        });
+
+        // Prefer to jump forward to the next line that matches
+        // Ignore current line even if it has a match
+        const bestMatch = results.find(r => r.range.start.line > currentLineIdx);
+
+        // If there's a "next" item then it's the best match, and we want
+        // to show this as the first item (so the user can type in a phrase,
+        // then hit enter immediately without "actually selecting" anything
+        // and just go right away to the nearest result.
+        results.sort((a, b) => {
+          return a === bestMatch ? -1 : b === bestMatch ? 1 : 0;
+        });
+
+        /*
+        if (ranges.length > 0) {
+          editor?.setDecorations(quickSearchDecoration, ranges);
+
+          if (bestMatch) {
+            editor.revealRange(bestMatch, vscode.TextEditorRevealType.Default);
+            // editor.revealRange(ranges[0], vscode.TextEditorRevealType.
+            // vscode.commands.executeCommand(`:${bestMatch.start.line}`);
+            // executeCommand "cursorMove"
+
+            // Come on vscode, there really should be an easier way
+            // to go to a line, shouldn't there?
+            vscode.commands.executeCommand("cursorMove", {
+              to: "down",
+              by: "line",
+              value: bestMatch.start.line - currentLineIdx,
+            });
+          } else {
+            editor.revealRange(ranges[0], vscode.TextEditorRevealType.Default);
+          }
+        } else {
+          editor?.setDecorations(quickSearchDecoration, []);
+        }
+          */
+
+        return results;
+      };
+
+      let x = 5;
+      if (x > 0) {
+        const qp = vscode.window.createQuickPick<Thing>();
+
+        qp.placeholder = "Search for a translation literal...";
+        qp.items = [];
+
+        qp.value = lastSearchText;
+        if (lastSearchText) {
+          qp.items = findMatches(lastSearchText);
+          editor?.setDecorations(quickSearchDecoration, qp.items.map(x => x.range));
+        }
+
+        qp.onDidChangeValue((val: string) => {
+          qp.items = findMatches(val);
+          editor?.setDecorations(quickSearchDecoration, qp.items.map(x => x.range));
+
+          lastSearchText = val;
+        });
+
+        qp.onDidChangeSelection((values: readonly Thing[]) => {
+          console.log("hey", values);
+          const choice = values[0];
+
+          const currentLineIdx = editor.selection.active.line || 0;
+
+          const dy = choice.range.start.line - currentLineIdx;
+          vscode.commands.executeCommand("cursorMove", {
+            to: dy >= 0 ? "down" : "up",
+            by: "line",
+            value: Math.abs(dy),//choice.range.start.line - currentLineIdx,
+          });
+        });
+
+        qp.onDidHide(() => {
+          qp.dispose();
+          editor?.setDecorations(quickSearchDecoration, []);
+        });
+        // vscode.window.showQuickPick(["abc", "def", "ghi"], { canPickMany: false });
+        qp.show();
+        return;
+      }
+
       vscode.window
         .showInputBox({
           prompt: "Find translations keys matching literal text:",
@@ -521,56 +584,6 @@ export function activate(context: vscode.ExtensionContext) {
             editor?.setDecorations(quickSearchDecoration, []);
             return;
           }
-
-          const lines = data.split("\n");
-
-          const matchingKeys: Array<string> = [];
-          for (const key in translationLiterals) {
-            if (
-              translationLiterals[key]
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase())
-            ) {
-              matchingKeys.push(key);
-            }
-          }
-
-          const ranges: Array<vscode.Range> = [];
-
-          for (const key of matchingKeys) {
-            const searchTerms = [
-              `$t("${key}")`,
-              `$t('${key}')`,
-              `$tc("${key}")`,
-              `$tc('${key}')`,
-              `"${key}"`,
-              `'${key}'`,
-            ];
-
-            for (const term of searchTerms) {
-              for (let i = 0; i < lines.length; i++) {
-                let pos = lines[i].indexOf(term);
-                while (pos >= 0) {
-                  ranges.push(
-                    new vscode.Range(
-                      new vscode.Position(i, pos),
-                      new vscode.Position(i, pos + term.length)
-                    )
-                  );
-
-                  pos = lines[i].indexOf(term, pos + term.length);
-                }
-              }
-            }
-          }
-
-          if (ranges.length > 0) {
-            editor?.setDecorations(quickSearchDecoration, ranges);
-
-            editor.revealRange(ranges[0], vscode.TextEditorRevealType.Default);
-          } else {
-            editor?.setDecorations(quickSearchDecoration, []);
-          }
         });
     }
   );
@@ -578,130 +591,3 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(disposable3);
 }
 
-function getHtml(
-  appSourceFile: vscode.Uri,
-  enUri: vscode.Uri,
-  markupUri: vscode.Uri,
-  langUris: { [key: string]: vscode.Uri }
-) {
-  const hiddenInputs = Object.keys(langUris)
-    .map((langCode) =>
-      `
-      <input type="hidden" rel="lang-code" data-lang-code="${langCode}" value="${langUris[langCode]}"/>
-    `.trim()
-    )
-    .join("");
-
-  return `
-		<html data-bs-theme="dark">
-		<head>
-			<meta http-equiv="Content-Security-Policy" content="connect-src 'self' http: https:">
-
-			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-
-			<script src="https://unpkg.com/vue@2.5.17/dist/vue.min.js"></script>
-			<!--<script src="https://unpkg.com/bootstrap-vue@2.0.0-rc.11/dist/bootstrap-vue.min.js"></script>-->
-			<script src="https://unpkg.com/bootstrap-vue@2.23.1/dist/bootstrap-vue.min.js"></script>
-
-			<script type="text/javascript" src="${appSourceFile}"></script>
-
-			<style type="text/css">
-      .xyzzy { color: blue; }
-			html, body {
-				height: 100%;
-			}
-			body {
-				padding: 0 !important;
-			}
-
-			input[type='checkbox'] {
-				transform: scale(1.5);
-			}
-
-      .modal-backdrop
-      {
-        opacity:0.5 !important;
-      }
-
-      .tree-parent > .tree-row:nth-child(even) {
-        background-color: rgb(26, 30, 34);
-      }
-      /* Want to force the default body-bg color for odd rows,
-         even when they're nested inside of an even child (expanded folder) */
-      .tree-parent > .tree-row:nth-child(odd) {
-        background-color: rgb(33, 37, 41);
-      }
-
-      .tree-row {
-				cursor: pointer;
-        border-bottom: 1px #383838 solid;
-			}
-			.tree-row .item,
-			.tree-row .parent {
-				border-top: 1px transparent solid;
-				border-bottom: 1px transparent solid;
-        padding: 4px 8px;
-			}
-			.tree-row .item:hover,
-			.tree-row .parent:hover [rel="item"] {
-				/*border-top-color: #555;
-				border-bottom-color: #555;*/
-				filter: brightness(120%);
-			}
-
-			label .prefix {
-				filter: brightness(50%);
-			}
-
-			/* Copy (most?) styles from b-form-input, but we want to use
-			   a contenteditable div so we can highlight filter text matches */
-			.fake-form-input {
-				font-size: 1.0rem;
-				line-height: 1.5;
-				color: var(--bs-body-color);
-				background-color: #111; /*var(--bs-body-bg);*/
-				border: var(--bs-border-width) solid var(--bs-border-color);
-				border-radius: var(--bs-border-radius);
-				padding: 4px 8px;
-			}
-
-			.highlighter {
-				background-color: #efcaa4;
-				color: #111;
-			}
-
-			.hover-icon {
-				display: none !important;
-			}
-
-      /* make sure hover doesn't also trigger the hover on all of the child folders */
-			.parent:hover > [rel="item"] .hover-icon,
-      .item:hover > [rel="item"] .hover-icon {
-				display: block !important;
-			}
-
-			.nowrap {
-				white-space: nowrap !important;
-			}
-
-      .disabled {
-        cursor: not-allowed;
-      }
-
-      /* css looks bad by default on b-alerts, so just hide the button styling */
-      .alert-dismissible button {
-        background: transparent !important;
-        border-width: 0 !important;
-      }
-		  </style>
-		</head>
-		<body>
-			${hiddenInputs}
-			<div id="app" data-uri="${markupUri}">
-				<!-- Will replace with data from app.html! -->
-			</div>
-		</body>
-		</html>
-	`;
-}

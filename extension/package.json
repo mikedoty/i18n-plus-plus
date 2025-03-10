@@ -34,10 +34,6 @@
 				"title": "i18n++"
 			},
 			{
-				"command": "main.i18nplusplus.comparisonView",
-				"title": "i18n++ - Comparison View"
-			},
-			{
 				"command": "main.i18nplusplus.quickSearch",
 				"title": "i18n++ - Quick Search"
 			}

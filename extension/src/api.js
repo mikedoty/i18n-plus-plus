@@ -6,7 +6,7 @@ const exec = require("child_process").exec;
 
 let relativeRoot = "";
 
-module.exports.setRelativeRoot = (value) => {
+module.exports.setRelativeRoot = (context, value) => {
   relativeRoot = value;
   if (!relativeRoot.endsWith("/")) {
     relativeRoot += "/";
@@ -15,11 +15,32 @@ module.exports.setRelativeRoot = (value) => {
 
 let developmentBranch = "";
 
-module.exports.setDevelopmentBranch = (value) => {
+module.exports.setDevelopmentBranch = (context, value) => {
   developmentBranch = value;
 };
 
-module.exports.translate = async (json) => {
+module.exports.getPrefs = async (context) => {
+  const prefs = context.workspaceState.get(
+    "i18n-plus-plus-prefs"
+  );
+
+  return prefs || "{}";
+};
+
+module.exports.savePrefs = async (context, json) => {
+  await context.workspaceState.update(
+    "i18n-plus-plus-prefs",
+    json
+  );
+  console.log(
+    "did it save?",
+    context.workspaceState.get("i18n-plus-plus-prefs")
+  );
+
+  return { success: true };
+};
+
+module.exports.translate = async (context, json) => {
   const { apiKey, payload } = json;
 
   return axios
@@ -35,7 +56,7 @@ module.exports.translate = async (json) => {
     });
 };
 
-module.exports.save = async (json) => {
+module.exports.save = async (context, json) => {
   const { langCode, key, value } = json;
 
   // const filename = `${relativeRoot}src/v2/services/i18n/lang/${langCode}.json`;
@@ -137,7 +158,21 @@ module.exports.save = async (json) => {
   return { success: true };
 };
 
-module.exports.getLangFile = async (langCode) => {
+// Get available language files by listing files in
+// the configured directory
+module.exports.getAvailableLangCodes = async (context) => {
+  const files = fs.readdirSync(relativeRoot).filter(x => x.endsWith(".json")).map(x => x.split(".json")[0]);
+
+  // TODO: If changed in future to allow non-english as the
+  // "base" language, then this probably won't work right.
+  // Maybe better to return all, then filter out the "base"
+  // language in the vue frontend?
+  return {
+    langCodes: files.filter(x => x !== "en"),
+  };
+};
+
+module.exports.getLangFile = async (context, langCode) => {
   // const langCode = req.url.substring(6);
   const data = safeReadFileSync(
     // `${relativeRoot}src/v2/services/i18n/lang/${langCode}.json`,
@@ -148,7 +183,7 @@ module.exports.getLangFile = async (langCode) => {
   return JSON.parse(data);
 };
 
-module.exports.getDiff = async () => {
+module.exports.getDiff = async (context) => {
   // Use en.json file to check for which translation keys
   // are new.
   const langCode = "en";
@@ -161,7 +196,7 @@ module.exports.getDiff = async () => {
       workaroundRelativeRoot = "c:/" + relativeRoot.substring(3);
     }
 
-    console.log("wrr", workaroundRelativeRoot);
+    // console.log("wrr", workaroundRelativeRoot);
     const cmd = exec(
       `cd ${workaroundRelativeRoot} && git show ${developmentBranch}:${langCode}.json`,
       (err, stdout, stderr) => {
@@ -218,6 +253,23 @@ module.exports.getDiff = async () => {
   const newKeys = current.keys.filter((x) => !existing.keys.includes(x));
 
   return { new: newKeys };
+};
+
+module.exports.copyKeyToClipboard = async (context, key, vscode) => {
+  vscode.env.clipboard.writeText(key);
+
+  return { success: true };
+};
+
+module.exports.findKeyInFiles = async (context, key, vscode) => {
+  vscode.commands.executeCommand("workbench.action.findInFiles", {
+    query: key,
+    triggerSearch: true,
+    matchWholeWord: true,
+    // isCaseSensitive: true,
+  });
+
+  return { success: true };
 };
 
 function alphabetize(obj) {
