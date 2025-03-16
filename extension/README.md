@@ -5,6 +5,20 @@ manage their translation files, and also has a feature that
 lets users search existing files for literal text (e.g. "where
 on this page is a key used that translated to Save Changes").
 
+# Previews
+
+> Search component files for literal text
+
+![](./gifs/example1.gif?raw=true)
+
+> Hover translation keys to see literal text in tooltip
+
+![](./gifs/example2.gif)
+
+> Manage translations and use Google Translate to translate into other languages
+
+![](./gifs/example3.gif)
+
 # Requirements
 
 * Your translation literal files (e.g. en.json, es.json, fr.json...) are stored in a single folder.
