@@ -1,52 +1,46 @@
 # i18n++
 
-## How to build for release
+This is a simple extension for VSCode that allows users to
+manage their translation files, and also has a feature that
+lets users search existing files for literal text (e.g. "where
+on this page is a key used that translated to Save Changes").
 
-The "build tools" (i.e. `vsce`) can be installed based on the instructions
-on this page:
+# Requirements
 
-https://code.visualstudio.com/api/working-with-extensions/publishing-extension
+* Your translation literal files (e.g. en.json, es.json, fr.json...) are stored in a single folder.
 
-Once those are installed, `cd` to the extension source code folder
-and just run
+> Make sure to configure the extension settings for i18n++ to point
+> to this folder.
 
-```
-vsce package
-```
-
-This will generate a .vsix file.
-
-## How to install into vscode
-
-In the Extensions panel, you can use the 3dot menu to "Install from vsix..."
-and just pick the .vsix file generated via the `vsce package` command.
-
-## How to use
-
-Use Ctrl+Shift+P to open command palette, then choose "i18n++"
-to open the extension.
-
-You will need a valid Google Translate API token to perform translations.
-
-## How to "fix" an old file if needed, to alphabetize
-
-This extension uses JSON.stringify to save an alphabetized version of the file, meaning
-that when you add a new translation key, if you add `name` then `name` will be placed
-between `median_income` and `old_address`.
-
-> Background:  Previously, translation files were not fully alphabetized.  When correcting
-> this, we introduced a significant diff in a PR to alphabetize the files.
->
-> If you are on an older branch that doesn't have the latest changes, you might have
-> outdated (unalphabetized) copies of the file and want a way to alphabetize them.
-
-* The `jq` program is required to run this command.
+* Your translation literal files are in a simple key/value format, meaning they look something like this:
 
 ```
-cat es.json | jq -S | sed -e 's/\r//g' > temp.json && mv temp.json es.json
+{
+    "errors": {
+        "missing_username": "Username is missing!"
+    }
+}
 ```
 
-> Note:  This step probably won't ever be needed, but I'm recording this as
-> a note in case of problems during initial transition.
+* (Optional) Google API translate key
 
-> Note:  This may introduce a trailing newline, which may or may not be desired.
+> If you wish to use google's translate api to generate machine translations
+> of your strings, you must provide a valid google translate api key.
+
+* (Optional) Your translation literal files are part of a git repo.
+
+> If your literal files are tracked in a git repo, then you can take advantage
+> of the "Only New" filter functionality within the extension.
+
+# Usage
+
+Launch i18n++ from the "Show all Commands" picker.
+
+You can also launch the "search in current file" (i.e. "Quick Search") from the
+command palette.  It's recommended that you assign this to your preferred
+keyboard shortcut (F3 can be a good option for this).
+
+# Known issues
+
+- English is hard-coded as the "default" language.
+- There may be some color theme issues, particularly for users not using dark mode.
