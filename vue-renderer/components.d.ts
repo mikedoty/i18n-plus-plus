@@ -16,6 +16,7 @@ declare module 'vue' {
     BInputGroup: typeof import('bootstrap-vue-next')['BInputGroup']
     BModal: typeof import('bootstrap-vue-next')['BModal']
     BPopover: typeof import('bootstrap-vue-next')['BPopover']
+    ExampleComponent: typeof import('./src/components/ExampleComponent.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     IconCommunity: typeof import('./src/components/icons/IconCommunity.vue')['default']
     IconDocumentation: typeof import('./src/components/icons/IconDocumentation.vue')['default']

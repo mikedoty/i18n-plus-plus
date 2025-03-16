@@ -28,10 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Get a flat list of keys that have only been added on current
       // branch - have not been merged into development
       fetchNewTranslationKeys() {
-        return (
-          this.callApi("getDiff")
-            .then((json) => json.new)
-        );
+
       },
 
       // Find an item in the tree hierarchy by its full key

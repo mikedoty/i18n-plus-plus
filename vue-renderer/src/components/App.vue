@@ -1,10 +1,5 @@
 <script setup lang="ts">
 import { useColorMode, type BaseButtonVariant } from 'bootstrap-vue-next'
-const mode = useColorMode({
-    // @ts-ignore
-    selector: "body",
-});
-mode.value = "dark";
 
 import { onMounted, ref, reactive, computed, watch } from 'vue';
 
@@ -21,9 +16,26 @@ import {
     untranslatedKeys,
     untranslatedLangCodeFocus,
     checkIsValueTranslated,
+    isGitAvailable,
+    newTranslationKeys,
+    refreshNewTranslationKeys,
+knownLanguageTuples,
 } from "@/components/hooks/useLang";
 
 import * as api from "@/api";
+
+const mode = useColorMode({
+    // @ts-ignore
+    selector: "body",
+});
+
+onMounted(() => {
+    if (document.body.classList.contains("vscode-dark")) {
+        mode.value = "dark";
+    } else {
+        mode.value = "light";
+    }
+});
 
 export interface Options {
     apiKey: string
@@ -31,6 +43,9 @@ export interface Options {
     onlyNew: boolean
     onlyUntranslated: boolean
     langCodeFocus: string
+
+    // internal from vscode extension config settings
+    singlePipeIndicatesPluralization: boolean
 };
 
 const options = reactive<Options>({
@@ -39,6 +54,7 @@ const options = reactive<Options>({
     onlyNew: false,
     onlyUntranslated: false,
     langCodeFocus: "",
+    singlePipeIndicatesPluralization: false,
 });
 
 // Get the existing prefs once, before settings up
@@ -145,20 +161,11 @@ const filteredItems = computed(() => {
         localWalk(results);
     }
 
-    if (options.onlyNew) {
-        // results = results.filter((itm) =>
-        //     checkItemContainsAnyKey(itm, newTranslationKeys)
-        // );
-
+    if (isGitAvailable.value && options.onlyNew) {
         walkAndSplice(results, (item: Item) => checkItemContainsAnyKey(item, newTranslationKeys));
     }
 
     if (options.onlyUntranslated) {
-        // results = results.filter((itm) =>
-        //     checkItemContainsAnyKey(itm, untranslatedKeys.value)
-        // );
-
-        // walkAndSplice(results, (item: Item) => checkItemMatchesFilterText(item, filterText.value));
         walkAndSplice(results, (item: Item) => checkItemContainsAnyKey(item, untranslatedKeys.value));
     }
 
@@ -192,12 +199,19 @@ watch(() => filteredItems.value, () => {
 });
 
 const showApiKey = ref(false);
-const newTranslationKeys = reactive<string[]>([]);
 
 const langCodes = reactive<string[]>(["es", "fr"]);
 
 const isSelectedItemPluralizable = computed(() => {
     if (!selection.item?.value) {
+        return false;
+    }
+
+    if (!options.singlePipeIndicatesPluralization) {
+        // Option must be enabled in extension settings.
+        // From what I understand, this format of singular|plural
+        // only applies to vue-i18n format (somewhat proprietary, as
+        // they all tend to be in their own ways)
         return false;
     }
 
@@ -328,6 +342,8 @@ async function onAddTranslation() {
             allItems.splice(0, allItems.length, ...getLang("en"));
         }
     }
+
+    await refreshNewTranslationKeys().catch(handleError);
 }
 
 // TODO: IMPLEMENT THESE
@@ -493,6 +509,13 @@ async function translateString(val: string, langCode: string): Promise<string | 
     return translatedValue;
 }
 
+// We hard-code define all possible lang codes (and "readable" name),
+// but usually there wouldn't be a point in showing any language
+// for which there isn't an i18n json file.
+const knownLanguageTuplesForAvailableLangCodes = computed(() => {
+    return knownLanguageTuples.filter(tup => langCodes.includes(tup[1]));
+});
+
 onMounted(async () => {
     const promises = [];
 
@@ -502,6 +525,7 @@ onMounted(async () => {
     // TODO: Fetch en file and share with extension via postMessage
     for (const langCode of ["en", ...langCodes]) {
         await refreshLangCodeItems(langCode).catch(handleError);
+        await refreshNewTranslationKeys().catch(handleError);
         // if (langCode === "en") {
         //     // Share with actual extension
         //     const msg = {
@@ -525,13 +549,6 @@ onMounted(async () => {
             allItems.splice(0, allItems.length, ...getLang("en"));
         }
     }
-
-    // TODO: Re-enable "only new" translation keys
-    // promises.push(
-    //     this.fetchNewTranslationKeys().then((keys) => {
-    //         this.newTranslationKeys = keys;
-    //     })
-    // );
 });
 
 </script>
@@ -541,7 +558,7 @@ onMounted(async () => {
         <div class="col-8 h-100 overflow-auto">
             <div class="d-flex flex-column h-100">
                 <div class="d-flex align-items-center px-4 py-2"
-                    style="background-color: #111519; border-bottom: 2px #222 solid">
+                    style="background-color: var(--panel-background-color); border-bottom: 2px var(--panel-border-color) solid">
                     <div>
                         <BInputGroup>
                             <BButton variant="secondary">
@@ -583,10 +600,13 @@ onMounted(async () => {
                             <li v-if="options.onlyUntranslated" class="ms-4">
                                 <select class="px-4 py-2" v-model="options.langCodeFocus">
                                     <option value="">(All Languages)</option>
-                                    <option value="es">es (Spanish)</option>
+                                    <!-- <option value="es">es (Spanish)</option>
                                     <option value="fr">fr (French)</option>
                                     <option value="fi">fi (Finnish)</option>
-                                    <option value="sv">sv (Swedish)</option>
+                                    <option value="sv">sv (Swedish)</option> -->
+                                    <template v-for="tup in knownLanguageTuplesForAvailableLangCodes" :key="tup[1]">
+                                        <option :value="tup[1]">{{ tup[0] }}</option>
+                                    </template>
                                 </select>
                             </li>
                         </ul>
@@ -617,7 +637,7 @@ onMounted(async () => {
                         </BButton>
                     </div>
                 </div>
-                <div class="flex-fill px-4 py-4 overflow-auto" style="border-right: 2px #222 solid">
+                <div class="flex-fill px-4 py-4 overflow-auto" style="background-color: var(--main-background-color); border-right: 2px #222 solid">
                     <Row :items="filteredItems" :current-source="expandedKeysSource" @select-item="onSelectItem"
                         :check-is-key-expanded="checkIsItemExpanded"
                         @toggle-expand="toggleExpanded($event, expandedKeysSource)" @show-add-new="onShowAddNew($event)"
@@ -625,7 +645,7 @@ onMounted(async () => {
                 </div>
             </div>
         </div>
-        <div class="col-4 h-100 px-4 py-4 overflow-auto" style="background-color: #111519">
+        <div class="col-4 h-100 px-4 py-4 overflow-auto" style="background-color: var(--panel-background-color)">
             <div class="row" style="filter: brightness(75%)">
                 <div class="col-12 d-flex align-items-center">
                     <div class="flex-fill">
@@ -687,14 +707,14 @@ onMounted(async () => {
                                     <div class="col-6">
                                         <label style="filter: brightness(0.75)">Singular</label>
                                         <!-- Typescript getting mad about $event claiming numberish, don't know why - it works fine... -->
-                                         <!-- @vue-ignore -->
+                                        <!-- @vue-ignore -->
                                         <BFormInput type="text" :value="getSingularSelectedItemTranslation(langCode)"
                                             @update:model-value="onUpdateSingularSelectedItemTranslation(langCode, $event)" />
                                     </div>
                                     <div class="col-6">
                                         <label style="filter: brightness(0.75)">Plural</label>
                                         <!-- Typescript mad here too, same deal.  I don't care.  gfy typescript... -->
-                                         <!-- @vue-ignore -->
+                                        <!-- @vue-ignore -->
                                         <BFormInput type="text" :value="getPluralSelectedItemTranslation(langCode)"
                                             @update:model-value="onUpdatePluralSelectedItemTranslation(langCode, $event)" />
                                     </div>
@@ -722,7 +742,7 @@ onMounted(async () => {
                                     <BButton variant="primary" @click="onSaveChanges(langCode)" class="me-2">
                                         Save Changes
                                     </BButton>
-                                    <BButton v-if="options.langCodeFocus === langCode" variant="primary"
+                                    <BButton v-if="false && options.langCodeFocus === langCode" variant="primary"
                                         @click="onSaveChanges(langCode, true)" class="me-2">
                                         Save and Continue
                                     </BButton>
@@ -773,8 +793,33 @@ li {
 
 <!-- global style at least for now, it was this way in original js version -->
 <style>
-.xyzzy {
-    color: blue;
+.vscode-dark {
+    --panel-background-color: var(--panel-background-color);
+    --panel-border-color: #222;
+
+    --main-background-color: transparent;
+
+    --tree-row-even-color: rgb(26, 30, 34);
+    --tree-row-odd-color: rgb(33, 37, 41);
+    --tree-row-border-bottom-color: #383838;
+
+    --form-input-background-color: #111;
+    --form-input-color: inherit;
+    /* --form-input-border-color:  */
+}
+
+.vscode-light {
+    --panel-background-color: #cacbcc;
+    --panel-border-color: #908d8d;
+
+    --main-background-color: rgb(237, 238, 239);
+
+    --tree-row-even-color: rgb(237, 238, 239);
+    --tree-row-odd-color: rgb(247, 247, 247);
+    --tree-row-border-bottom-color: #c8c8c8;
+
+    --form-input-background-color: #4c4949;
+    --form-input-color: #eee;
 }
 
 html,
@@ -795,18 +840,20 @@ input[type='checkbox'] {
 }
 
 .tree-parent>.tree-row:nth-child(even) {
-    background-color: rgb(26, 30, 34);
+    background-color: var(--tree-row-even-color);
 }
 
-/* Want to force the default body-bg color for odd rows,
-         even when they're nested inside of an even child (expanded folder) */
+/*
+Want to force the default body-bg color for odd rows,
+even when they're nested inside of an even child (expanded folder)
+*/
 .tree-parent>.tree-row:nth-child(odd) {
-    background-color: rgb(33, 37, 41);
+    background-color: var(--tree-row-odd-color);
 }
 
 .tree-row {
     cursor: pointer;
-    border-bottom: 1px #383838 solid;
+    border-bottom: 1px var(--tree-row-border-bottom-color) solid;
 }
 
 .tree-row .item,
@@ -832,8 +879,8 @@ label .prefix {
 .fake-form-input {
     font-size: 1.0rem;
     line-height: 1.5;
-    color: var(--bs-body-color);
-    background-color: #111;
+    color: var(--form-input-color);
+    background-color: var(--form-input-background-color);
     /*var(--bs-body-bg);*/
     border: var(--bs-border-width) solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);

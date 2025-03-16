@@ -1,9 +1,9 @@
 {
 	"name": "i18n-plus-plus",
 	"displayName": "i18n++",
-	"version": "0.9.892",
+	"version": "0.7.0",
 	"publisher": "mikedoty",
-	"description": "Utility to manage i18n translation key values.",
+	"description": "Manage and translate i18n translation key values, and search existing files for keys by the literal strings.",
 	"engines": {
 		"vscode": "^1.74.0"
 	},
@@ -25,6 +25,11 @@
 					"type": "string",
 					"default": "",
 					"description": "The name of the branch that you and your team merge work into.  This might be \"development\" or \"dev\" etc.  This is used to determine which translation keys are new (i.e. \"Show New Only\")."
+				},
+				"i18n-plus-plus.singlePipeIndicatesPluralization": {
+					"type": "boolean",
+					"default": false,
+					"description": "Some i18n file formats enable using a pipe character to separate singular and plural translations.  For example, i have 1 dog | i have {n} dogs.  Setting this to true will allow you to translate each side of the pipe on its own."
 				}
 			}
 		},

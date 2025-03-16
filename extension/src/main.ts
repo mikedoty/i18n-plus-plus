@@ -28,6 +28,8 @@ export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
     "main.i18nplusplus",
     () => {
+      const isDarkMode = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
+
       // vscode.window.showInformationMessage("hey there! welcome!");
       // The code you place here will be executed every time your command is executed
       const extensionConfig = vscode.workspace.getConfiguration(
@@ -223,7 +225,7 @@ export function activate(context: vscode.ExtensionContext) {
         <script type="module" crossorigin src="${diskPaths.js}"></script>
         <link rel="stylesheet" crossorigin href="${diskPaths.css}">
       </head>
-      <body class="h-100">
+      <body class="h-100 ${isDarkMode ? 'vscode-dark' : 'vscode-light'}">
         <div id="app" class="h-100"></div>
       </body>
       </html>
@@ -404,7 +406,7 @@ export function activate(context: vscode.ExtensionContext) {
         const localWalk = (obj: any, prefix: string) => {
           for (let key in obj) {
             if (obj[key] instanceof Object) {
-              localWalk(obj[key], (prefix ? prefix + "." : "") + key + ".");
+              localWalk(obj[key], (prefix || "") + key + ".");
             } else {
               translationLiterals[prefix + key] = obj[key];
             }
@@ -433,17 +435,48 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const lines = data.split("\n");
-      const findMatches = (searchTerm: string) => {
-        const results: Thing[] = [];
+      const findMatches = (filterText: string) => {
+        let results: Thing[] = [];
+
+        if (filterText.trim() === "") {
+          return results;
+        }
+
+        // If we remove the suffix from a key (e.g. remove _one or _other)
+        // then let's add the original key + its literal string here
+        // so we have access to the translated literal string to render
+        // somewhere in the quick pick ui
+        const pluralizationRelatedAliases: { [key: string]: string } = {};
 
         const matchingKeys: string[] = [];
         for (const key in translationLiterals) {
           if (
             translationLiterals[key]
               .toLowerCase()
-              .includes(searchTerm.toLowerCase())
+              .includes(filterText.toLowerCase())
           ) {
             matchingKeys.push(key);
+
+            // Different i18n file formats have different ways to represent
+            // singular -vs- plural keys.  Make our best effort to support
+            // each of these.
+            for (const pluralSuffix of ["_one", "_other", "_two", "_few", "_many", ".one", ".other"]) {
+              if (key.endsWith(pluralSuffix)) {
+                // singularKey will be the key that is used in the actual
+                // component file.  e.g. if the i18n file has `i_have_dogs_one` and
+                // `i_have_dogs_other`, then we'll search for e.g. `t("i_have_dogs")`
+                //
+                // Note that we will also search for the original raw key (e.g.
+                // "i_have_dogs_one") - I guess just in case the original key is not
+                // intended to be used as a singular/plural key.
+                const singularKey = key.substring(0, key.length - pluralSuffix.length);
+                if (singularKey.length && !matchingKeys.includes(singularKey)) {
+                  matchingKeys.push(singularKey);
+
+                  pluralizationRelatedAliases[singularKey] = translationLiterals[key];
+                }
+              }
+            }
           }
         }
 
@@ -452,10 +485,15 @@ export function activate(context: vscode.ExtensionContext) {
 
         for (const key of matchingKeys) {
           const searchTerms = [
-            `$t("${key}")`,
-            `$t('${key}')`,
-            `$tc("${key}")`,
-            `$tc('${key}')`,
+            // Don't search for closing paren, because it's totally possible
+            // some count or context whatever will be given, such as
+            // e.g. $t("bad_password_n_attempts_remaining", { count: 2 })
+            `$t("${key}"`,
+            `$t('${key}'`,
+            `$tc("${key}"`,
+            `$tc('${key}'`,
+            `.t("${key}"`,
+            `.t('${key}'`,
             `"${key}"`,
             `'${key}'`,
           ];
@@ -473,7 +511,8 @@ export function activate(context: vscode.ExtensionContext) {
                 );
                 ranges.push(range);
 
-                results.push(new Thing(searchTerms[j], `Line ${i + 1}`, lines[i], range));
+                const stringLiteralValue = translationLiterals[key] || pluralizationRelatedAliases[key];
+                results.push(new Thing(/*searchTerms[j]*/`Line ${i + 1}`, `  Key: ${key}  |  Literal: ${stringLiteralValue}`, lines[i].trim(), range));
 
                 // pos = lines[i].indexOf(term, pos + term.length);
 
@@ -487,7 +526,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Sort by line order, and then we'll be able to determine
         // the "next" item
-        results.sort((a, b) => {
+        results = results.sort((a, b) => {
           return a.range.start.line < b.range.start.line ? -1 : a.range.start.line > b.range.start.line ? 1 : 0;
         });
 
@@ -499,7 +538,7 @@ export function activate(context: vscode.ExtensionContext) {
         // to show this as the first item (so the user can type in a phrase,
         // then hit enter immediately without "actually selecting" anything
         // and just go right away to the nearest result.
-        results.sort((a, b) => {
+        results = results.sort((a, b) => {
           return a === bestMatch ? -1 : b === bestMatch ? 1 : 0;
         });
 
@@ -531,60 +570,89 @@ export function activate(context: vscode.ExtensionContext) {
         return results;
       };
 
-      let x = 5;
-      if (x > 0) {
-        const qp = vscode.window.createQuickPick<Thing>();
+      const qp = vscode.window.createQuickPick<Thing>();
 
-        qp.placeholder = "Search for a translation literal...";
-        qp.items = [];
+      qp.placeholder = "Search for a translation literal...";
+      qp.items = [];
 
-        qp.value = lastSearchText;
-        if (lastSearchText) {
-          qp.items = findMatches(lastSearchText);
-          editor?.setDecorations(quickSearchDecoration, qp.items.map(x => x.range));
-        }
+      qp.value = lastSearchText;
+      if (lastSearchText) {
+        qp.items = findMatches(lastSearchText);
+        // qp.items.splice(0, qp.items.length, ...findMatches(lastSearchText));
+        editor?.setDecorations(quickSearchDecoration, qp.items.map(x => x.range));
 
-        qp.onDidChangeValue((val: string) => {
-          qp.items = findMatches(val);
-          editor?.setDecorations(quickSearchDecoration, qp.items.map(x => x.range));
-
-          lastSearchText = val;
-        });
-
-        qp.onDidChangeSelection((values: readonly Thing[]) => {
-          console.log("hey", values);
-          const choice = values[0];
-
-          const currentLineIdx = editor.selection.active.line || 0;
-
-          const dy = choice.range.start.line - currentLineIdx;
-          vscode.commands.executeCommand("cursorMove", {
-            to: dy >= 0 ? "down" : "up",
-            by: "line",
-            value: Math.abs(dy),//choice.range.start.line - currentLineIdx,
-          });
-        });
-
-        qp.onDidHide(() => {
-          qp.dispose();
-          editor?.setDecorations(quickSearchDecoration, []);
-        });
-        // vscode.window.showQuickPick(["abc", "def", "ghi"], { canPickMany: false });
-        qp.show();
-        return;
+        console.log("oninit", qp.items.map(x => x.range.start.line));
       }
 
-      vscode.window
-        .showInputBox({
-          prompt: "Find translations keys matching literal text:",
-          title: "i18n++ - Key Search by Text",
-        })
-        .then((searchTerm) => {
-          if (!searchTerm) {
-            editor?.setDecorations(quickSearchDecoration, []);
-            return;
-          }
+      let lastActiveSelection: Thing | null = null;
+      qp.onDidChangeValue((val: string) => {
+        const results = findMatches(val);
+        qp.items = results;
+        editor?.setDecorations(quickSearchDecoration, qp.items.map(x => x.range));
+
+        // remember the current search text so when user activates
+        // quick pick next time, we can resume that search
+        lastSearchText = val;
+        // reset last active when a new search is performed
+        lastActiveSelection = null;
+        console.log("onchange", qp.items.map(x => x.range.start.line));
+      });
+
+      qp.onDidChangeActive((values: readonly Thing[]) => {
+        const choice = values[0];
+        if (!choice) {
+          // I think this happens when there's no search results
+          return;
+        }
+
+        if (choice === lastActiveSelection) {
+          // Workaround for some lame vscode bug where "onDidChangeActive"
+          // is firing twice, so the cursor ends up moving to the wrong spot
+          // (because it ends up += dy twice in a row)
+          return;
+        }
+
+        const currentLineIdx = editor.selection.active.line || 0;
+
+        const dy = choice.range.start.line - currentLineIdx;
+        vscode.commands.executeCommand("cursorMove", {
+          to: dy >= 0 ? "down" : "up",
+          by: "line",
+          value: Math.abs(dy),//choice.range.start.line - currentLineIdx,
         });
+
+        editor.revealRange(choice.range, vscode.TextEditorRevealType.InCenter);
+
+        lastActiveSelection = choice;
+      });
+
+      // Hitting enter here is doing some annoying unwanted behavior
+      // where after moving cursor to the correct line, the "Enter" keypress
+      // passes through into the editor and moves the cursor
+      // one line farther.  Don't want to deal with it right now.
+      qp.onDidChangeSelection((values: readonly Thing[]) => {
+        // const choice = values[0];
+
+        // setTimeout(() => {
+        //   const currentLineIdx = editor.selection.active.line || 0;
+
+        //   const dy = choice.range.start.line - currentLineIdx;
+        //   vscode.commands.executeCommand("cursorMove", {
+        //     to: dy >= 0 ? "down" : "up",
+        //     by: "line",
+        //     value: Math.abs(dy),//choice.range.start.line - currentLineIdx,
+        //   });
+        // }, 50);
+
+        // qp.hide();
+      });
+
+      qp.onDidHide(() => {
+        qp.dispose();
+        editor?.setDecorations(quickSearchDecoration, []);
+      });
+      // vscode.window.showQuickPick(["abc", "def", "ghi"], { canPickMany: false });
+      qp.show();
     }
   );
 

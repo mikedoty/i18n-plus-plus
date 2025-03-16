@@ -12,9 +12,11 @@
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
+    "@ladjs/country-language": "^1.0.3",
     "@vue/compat": "^3.5.13",
     "bootstrap-vue-next": "^0.27.0",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-i18n": "^11.1.2"
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",

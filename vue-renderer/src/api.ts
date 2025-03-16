@@ -59,6 +59,15 @@ export function fetchLangCode(langCode: string) {
         });
 };
 
+export function getNewTranslationKeys() {
+    return (
+        callApi<{
+            new: string[]
+            error?: string
+        }>("getDiff")
+    );
+}
+
 export function translateString(val: string, toLang: string, options: Options) {
     return callApi("translate", {
         apiKey: options.apiKey,

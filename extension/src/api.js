@@ -19,12 +19,38 @@ module.exports.setDevelopmentBranch = (context, value) => {
   developmentBranch = value;
 };
 
-module.exports.getPrefs = async (context) => {
+module.exports.getPrefs = async (context, vscode) => {
   const prefs = context.workspaceState.get(
     "i18n-plus-plus-prefs"
   );
 
-  return prefs || "{}";
+  const extensionConfig = vscode.workspace.getConfiguration(
+    "i18n-plus-plus"
+  );
+
+  let singlePipeIndicatesPluralization = false;
+  let configValue = extensionConfig.get("singlePipeIndicatesPluralization");
+  if (configValue) {
+    singlePipeIndicatesPluralization = configValue;
+  }
+
+  let parsedPrefs;
+  if (prefs) {
+    try {
+      parsedPrefs = {
+        ...JSON.parse(prefs),
+      };
+    } catch (ex) {
+      parsedPrefs = prefs;
+    }
+  }
+
+  parsedPrefs = {
+    ...parsedPrefs,
+    singlePipeIndicatesPluralization,
+  };
+
+  return parsedPrefs;
 };
 
 module.exports.savePrefs = async (context, json) => {
@@ -188,6 +214,48 @@ module.exports.getDiff = async (context) => {
   // are new.
   const langCode = "en";
 
+  const promiseCheckGitEnabled = new Promise((resolve) => {
+    let workaroundRelativeRoot = relativeRoot;
+    // More hackery for windows users (like... mee..... :/)
+    if (relativeRoot.startsWith("/c/")) {
+      workaroundRelativeRoot = "c:/" + relativeRoot.substring(3);
+    }
+
+    // Check to see if the translations files are in
+    // a git-enabled repo.
+    //
+    // If not, we obviously can't provide "only new" data.
+    let cmd = exec(
+      `cd ${workaroundRelativeRoot} && git rev-parse --is-inside-work-tree`,
+      (err, stdout, stderr) => {
+        if (stdout && stdout.trim() === "true") {
+          return resolve(true);
+        }
+
+        return resolve(false);
+      }
+    );
+  });
+
+  const isGitEnabled = await promiseCheckGitEnabled;
+
+  if (!isGitEnabled) {
+    // Can't calculate "new keys" because it's not a git repo
+    return {
+      new: [],
+      error: "Not a valid git repo",
+    };
+  }
+
+  if (!developmentBranch) {
+    // Can't calculate "new keys" because dev branch isn't configured
+    return {
+      new: [],
+      error: "Main/development branch is not configured in extension settings.",
+    };
+  }
+
+  let err1 = null;
   const promise1 = new Promise((resolve) => {
     let result;
     let workaroundRelativeRoot = relativeRoot;
@@ -197,9 +265,14 @@ module.exports.getDiff = async (context) => {
     }
 
     // console.log("wrr", workaroundRelativeRoot);
-    const cmd = exec(
+    cmd = exec(
       `cd ${workaroundRelativeRoot} && git show ${developmentBranch}:${langCode}.json`,
       (err, stdout, stderr) => {
+        if (err || stderr) {
+          err1 = err || stderr;
+          return;
+        }
+
         console.log(stdout, stderr, err);
         const data = stdout;
         const json = JSON.parse(data);
@@ -247,6 +320,12 @@ module.exports.getDiff = async (context) => {
     resolve({ keys });
   });
 
+  if (err1) {
+    // Something went wrong when running exec commands to calculate git diffs
+    console.error("error calculating git diffs", err1);
+    return resolve({ keys: [] });
+  }
+
   const existing = await promise1;
   const current = await promise2;
 
@@ -266,6 +345,10 @@ module.exports.findKeyInFiles = async (context, key, vscode) => {
     query: key,
     triggerSearch: true,
     matchWholeWord: true,
+    // I've commented this out because I'm concerned it permanently
+    // toggles the option in "find in files" - i don't want that to
+    // happen, and i'm not really concerned with this setting anyway
+    // (i'll still get all the results)
     // isCaseSensitive: true,
   });
 
