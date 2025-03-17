@@ -256,7 +256,7 @@ module.exports.getDiff = async (context) => {
   }
 
   let err1 = null;
-  const promise1 = new Promise((resolve) => {
+  const promise1 = new Promise((resolve, reject) => {
     let result;
     let workaroundRelativeRoot = relativeRoot;
     // More hackery for windows users (like... mee..... :/)
@@ -266,14 +266,14 @@ module.exports.getDiff = async (context) => {
 
     // console.log("wrr", workaroundRelativeRoot);
     cmd = exec(
-      `cd ${workaroundRelativeRoot} && git show ${developmentBranch}:${langCode}.json`,
+      `cd ${workaroundRelativeRoot} && git show ${developmentBranch}:./${langCode}.json`,
       (err, stdout, stderr) => {
         if (err || stderr) {
           err1 = err || stderr;
-          return;
+          return reject(err1);
         }
 
-        console.log(stdout, stderr, err);
+        // console.log(stdout, stderr, err);
         const data = stdout;
         const json = JSON.parse(data);
 
@@ -320,14 +320,15 @@ module.exports.getDiff = async (context) => {
     resolve({ keys });
   });
 
-  if (err1) {
+  let existing, current;
+  try {
+    existing = await promise1;
+    current = await promise2;
+  } catch (err) {
     // Something went wrong when running exec commands to calculate git diffs
-    console.error("error calculating git diffs", err1);
-    return resolve({ keys: [] });
+    console.error("error calculating git diffs", err);
+    return { new: [] };
   }
-
-  const existing = await promise1;
-  const current = await promise2;
 
   const newKeys = current.keys.filter((x) => !existing.keys.includes(x));
 

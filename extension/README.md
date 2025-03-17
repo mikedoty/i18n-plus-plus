@@ -9,15 +9,15 @@ on this page is a key used that translated to Save Changes").
 
 > Search component files for literal text
 
-![](./gifs/example1.gif?raw=true)
+![](https://github.com/mikedoty/i18n-plus-plus/blob/master/extension/gifs/example1.gif?raw=true)
 
 > Hover translation keys to see literal text in tooltip
 
-![](./gifs/example2.gif)
+![](https://github.com/mikedoty/i18n-plus-plus/blob/master/extension/gifs/example2.gif?raw=true)
 
 > Manage translations and use Google Translate to translate into other languages
 
-![](./gifs/example3.gif)
+![](https://github.com/mikedoty/i18n-plus-plus/blob/master/extension/gifs/example3.gif?raw=true)
 
 # Requirements
 
