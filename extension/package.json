@@ -1,7 +1,7 @@
 {
 	"name": "i18n-plus-plus",
 	"displayName": "i18n++",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"publisher": "mikedoty",
 	"description": "Manage and translate i18n translation key values, and search existing files for keys by the literal strings.",
 	"engines": {
